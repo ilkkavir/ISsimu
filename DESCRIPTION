@@ -1,0 +1,10 @@
+Package: ISsimu
+Version: 0.1-0
+Date: 2010-11-05
+Title: Incoherent scatter radar simulator
+Author: Ilkka Virtanen <ilkka.i.virtanen@oulu.fi> 
+Maintainer: Ilkka Virtanen <ilkka.i.virtanen@oulu.fi>
+Description: Incoherent scatter radar simulator, with a possibility to take plasma parameters from ionospheric models. The simulation technique is the same as in the radarsim package by Juha Vierinen.
+License:
+Depends: iri2011, ISspectrum
+

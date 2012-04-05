@@ -476,20 +476,26 @@ ISsimu.iri <- function(time=c(2000,1,1,11,0,0),latitude=69.5864,longitude=19.227
   txlen       <- length(tx)
 
   # create the frequency axis for IS spectrum calculation
-  fmax        <- 2*radarFreq/100000
+  fmax        <- min(8*radarFreq/100000,sampFreq/2)
   nf          <- 2*round(fmax/10)
   freqs       <- c(seq(0,(nf/2)),seq((-nf/2+1),-1))*10.0
-  heights     <- seq(hmin,hmax,by=(1.0e6*.1498962)/sampFreq)
+  heights     <- seq(hmin,hmax,by=(1.0e6*.149896229)/sampFreq)
+
+  # range in time units
+  ranges      <- floor(heights/(299792.458/2)*sampFreq)
+
+  # remove 0-heights
+  heights     <- heights[ranges>0]
+  ranges      <- ranges[ranges>0]
 
   # the spectrum 
-  spectrum    <- ISspectrum.iri( time=time , latitude=latitude , longitude=longitude , heights=heights , freq=freqs , fradar=radarFreq )
+  spectrum    <- ISspectrum.iri( time=time , latitude=latitude , longitude=longitude , heights=heights , freq=freqs , fradar=radarFreq , savePlasmaParams=TRUE)
 
   # fill in the missing values (they really are zeros!), and normalize the spectrum
   spectrum[is.na(spectrum)] <- 0
   spectrum <- spectrum*spectrumScale
-
-  # range in time units
-  ranges      <- floor(heights/(299792.458/2)*sampFreq)
+  # there will be some negative values due to numerical inaccuracies, set them to zero
+  spectrum[spectrum<0] <- 0
 
   # smallest and largest range
   rmin        <- min(ranges)

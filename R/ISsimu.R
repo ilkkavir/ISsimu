@@ -497,8 +497,8 @@ ISsimu.iri <- function(time=c(2000,1,1,11,0,0),latitude=69.5864,longitude=19.227
 
   # save the simulation parameters
   simuParam   <- list(time=time,latitude=latitude,longitude=longitude,hmin=hmin,hmax=hmax,sampFreq=sampFreq,
-                     experiment=experiment,radarFreq=radarFreq,p_m0=c(30.5,16.0,1.0),flen=flen)
-  save(simuParam,file='ISsimu.iri2Param.Rdata')
+                     experiment=experiment,radarFreq=radarFreq,p_m0=c(30.5,16.0,1.0),flen=flen,spectrumScale=spectrumScale)
+  save(simuParam,file='ISsimu.iriParam.Rdata')
 
 
   # the transmission envelope

@@ -1,1 +1,1 @@
-export(ISsimu.iri,addRandomNoise,DABpowerSpectrum,ISsimu.iri )
+export(ISsimu.iri,addRandomNoise,DABpowerSpectrum,ISsimu.iri,Rdata2gdf,Rdata2gdf.dir)

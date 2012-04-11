@@ -167,6 +167,23 @@ ISsimu.iri.old <- function(time=c(2000,1,1,11,0,0),latitude=69.5864,longitude=19
 
 } #ISSimu.iri
 
+Rdata2gdf.dir <- function(ddir='.',prefix='simudata',dataScale=1){
+
+  f <- dir(ddir,pattern=prefix)
+  f <- f[grep('Rdata',f)]
+
+  for(fn in f) Rdata2gdf(fn,dataScale)
+  
+}
+
+Rdata2gdf <- function(fname,dataScale=1){
+  load(fname)
+  nc <- nchar(fname)
+  gdfprefix <- substr(fname,1,nc-13)
+  gdfnum <- as.numeric(substr(fname,nc-11,nc-6))
+  writeSimuDataFile.gdf(fnum=gdfnum,rsig=rsig*dataScale,rtx=rtx,flen=flen,prefix=gdfprefix,nameadd=NULL)
+  invisible()
+}
 
 writeSimuDataFile <- function(fnum,rsig,rtx,flen,prefix='simudata',nameadd=NULL,fileType='gdf'){
   if(tolower(fileType[1])=='gdf'){
@@ -273,7 +290,7 @@ makeUnixTime <- function(time){
 
 } #makeUnixTime
 
-addRandomNoise <- function(ddir='.',prefix='simudata-',std=1,firstfile=1,lastfile=Inf,maxmiss=10,echoScale=1){
+addRandomNoise <- function(ddir='.',prefix='simudata-',std=1,firstfile=1,lastfile=Inf,maxmiss=10,echoScale=1,txScale=1,fileType=c('Rdata','gdf')){
 # 
 # Add random noise to simulated radar data
 # 
@@ -283,19 +300,34 @@ addRandomNoise <- function(ddir='.',prefix='simudata-',std=1,firstfile=1,lastfil
   # read the data and add noise
   k <- firstfile
   nmiss <- 0
-  while(T){
+  repeat{
     if(k>lastfile) break
     if(nmiss>maxmiss) break
     fchar <- as.character(k)
     nf <- nchar(fchar)
-    fname <- file.path(ddir,paste('simudata-',substr('000000',1,(6-nf)),fchar,'.gdf',sep=''))
+    if(tolower(fileType[1])=='rdata'){
+      fname <- file.path(ddir,paste('simudata-',substr('000000',1,(6-nf)),fchar,'.Rdata',sep=''))
+    }else if(tolower(fileType[1])=='gdf'){
+      fname <- file.path(ddir,paste('simudata-',substr('000000',1,(6-nf)),fchar,'.gdf',sep=''))
+    }else{
+      stop(paste('Unknown file type:',fileType[1]))
+    }
     if(file.exists(fname)){
       nmiss <- 0
-      flen  <- file.info(fname)$size/4
-      rdata <- readRawData(fname,flen)
-      necho <- sum(!rdata$TX)
-      rdata$data[!rdata$TX] <- (rdata$data[!rdata$TX] +  rnorm(necho,0,std) + 1i*rnorm(necho,0,std))/echoScale
-      writeSimuDataFile(k,rdata$data/2**14,rdata$TX,flen,nameadd=paste('_noise_',as.character(std),sep=''))
+      if(tolower(fileType[1])=='rdata'){
+        load(fname)
+        ntx        <- sum(rtx)
+        necho      <- flen - ntx
+        rsig[!rtx] <- ( rsig[!rtx] + rnorm(necho,0,std) + 1i*rnorm(necho,0,std) ) * echoScale
+        rsig[rtx]  <- rsig[rtx] * txScale
+        writeSimuDataFile(k,rsig,rtx,flen,nameadd=paste('_noise_',as.character(std),sep=''),fileType='Rdata')
+      }else{
+        flen  <- file.info(fname)$size/4
+        rdata <- readRawData(fname,flen)
+        necho <- sum(!rdata$TX)
+        rdata$data[!rdata$TX] <- ( rdata$data[!rdata$TX] +  rnorm(necho,0,std) + 1i*rnorm(necho,0,std) ) * echoScale
+        writeSimuDataFile(k,rdata$data/2**14,rdata$TX,flen,nameadd=paste('_noise_',as.character(std),sep=''),fileType='gdf')
+      }
     }else{
       nmiss <- nmiss + 1
     }

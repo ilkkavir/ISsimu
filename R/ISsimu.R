@@ -405,10 +405,10 @@ ISsimu.general <- function(ISspectra,rmin=1,TXenvelope,flen=1000000,fileType=c('
   rmax <- rmin + nh - 1
 
   # squareroot of the spectra
-  ISspectraSqr <- sqrt(ISspectra)
+  ISspectraSqr <- t(sqrt(ISspectra))
 
   # matrix for the non-correlating random signal
-  sigm        <- matrix(nrow=nh,ncol=nf)
+  sigm        <- matrix(ncol=nh,nrow=nf)
   
   # initial random signal
   sigm[,]     <- rnorm(nf*nh) + 1i*rnorm(nf*nh)
@@ -435,8 +435,12 @@ ISsimu.general <- function(ISspectra,rmin=1,TXenvelope,flen=1000000,fileType=c('
   txlen <- length(tx)
   repeat{
 
+
+    gc()
+    
     # create proper correlating signals at all ranges
-    for(k in seq(1,nh)) sigcm[k,] <- fft( ( fft(sigm[k,]) * ISspectraSqr[k,] ) , inverse=T ) / nf
+#    for(k in seq(1,nh)) sigcm[k,] <- fft( ( fft(sigm[k,]) * ISspectraSqr[k,] ) , inverse=T ) / nf
+    sigcm <- mvfft( ( mvfft(sigm) * ISspectraSqr ) ,inverse=TRUE ) / nf
 
     # signal values
     for(k in seq((nf-overlap))){
@@ -448,7 +452,7 @@ ISsimu.general <- function(ISspectra,rmin=1,TXenvelope,flen=1000000,fileType=c('
       }else{
         # proper part of the envelope
         curenv     <- currentEnvelope(tx,tnum,txlen,rmin,rmax) 
-        rsig[snum] <- sum(sigcm[,k]*curenv)
+        rsig[snum] <- sum(sigcm[k,]*curenv)
         rtx[snum]  <- FALSE
       }
 
@@ -469,8 +473,8 @@ ISsimu.general <- function(ISspectra,rmin=1,TXenvelope,flen=1000000,fileType=c('
     }
 
     # shift the overlapping part of sigm and generate new random signals
-    if(overlap>0) sigm[,1:overlap] <- sigm[,(nf-overlap+1):nf]
-    sigm[,(overlap+1):nf]          <- rnorm((nf-overlap)*nh) + 1i*rnorm((nf-overlap)*nh)
+    if(overlap>0) sigm[1:overlap,] <- sigm[(nf-overlap+1):nf,]
+    sigm[(max(overlap,0)+1):nf,]          <- rnorm((nf-max(overlap,0))*nh) + 1i*rnorm((nf-max(overlap,0))*nh)
 
   }
 

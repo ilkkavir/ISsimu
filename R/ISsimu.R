@@ -565,3 +565,52 @@ ISsimu.iri <- function(time=c(2000,1,1,11,0,0),latitude=69.5864,longitude=19.227
 
 
 
+IQsample <- function(rsig,t=seq(length(rsig)),cfreq,nfilter){
+
+  # IQ-sampling of the real signal rsig, with centre frequency cfreq and filter length (plus decimation)
+  # of nfilter samples
+
+  iqsig <- rsig * exp(1i*2*pi*cfreq*t)
+  boxcar <- t[]*0
+  boxcar[1:nfilter]<-1/sqrt(nfilter)
+  iqfilter <- fft( ( fft(iqsig) * fft(boxcar) )[1:floor(length(t)/nfilter)] , inverse=TRUE ) / length(rsig)
+
+  return(iqfilter)
+  
+}
+
+IQ2real <- function(iqsig,t=seq(length(iqsig)),cfreq,nfilter){
+
+  # an imperfect reconstruction of the original real input signal from an IQ signal
+  #
+  # t is  a time vector for the *output* data vector!!
+  #
+
+  ns <- length(iqsig)
+  
+  boxcar <- rfft <- rep(0,ns*nfilter)
+  
+  boxcar[1:nfilter] <- 1*sqrt(nfilter)
+  
+  iqfft <- fft(iqsig)
+  
+  rfft[1:ns] <- iqfft
+
+  boxfft <- fft(boxcar)
+  # replace zeros with ones, which is possible because we assumed a narrow-band signal
+  boxfft[abs(boxfft)<1e-10] <- 1
+
+  # a signal with one spectral peak at correct place
+  rsig <- fft(  rfft / boxfft , inverse=TRUE )   * exp( -1i*2*pi*cfreq*t )
+
+  # add the mirrored spectrum peak and return
+  frsig <- fft(rsig)
+  frsig[2:(ns*nfilter)] <- frsig[2:(ns*nfilter)] + Conj(rev(frsig[2:(ns*nfilter)]))
+  rsig <- fft( frsig , inverse=TRUE) / ns**2
+
+  return(Re(rsig))
+  
+
+}
+
+

@@ -167,21 +167,23 @@ ISsimu.iri.old <- function(time=c(2000,1,1,11,0,0),latitude=69.5864,longitude=19
 
 } #ISSimu.iri
 
-Rdata2gdf.dir <- function(ddir='.',prefix='simudata',dataScale=1){
+Rdata2gdf.dir <- function(ddir='.',prefix='simudata',echoScale=1,txScale=1){
 
-  f <- dir(ddir,pattern=prefix)
+  f <- dir(ddir,pattern=prefix,full.names=TRUE)
   f <- f[grep('Rdata',f)]
 
-  for(fn in f) Rdata2gdf(fn,dataScale)
+  for(fn in f) Rdata2gdf(fn,echoScale,txScale)
   
 }
 
-Rdata2gdf <- function(fname,dataScale=1){
+Rdata2gdf <- function(fname,echoScale=1,txScale){
   load(fname)
   nc <- nchar(fname)
   gdfprefix <- substr(fname,1,nc-13)
   gdfnum <- as.numeric(substr(fname,nc-11,nc-6))
-  writeSimuDataFile.gdf(fnum=gdfnum,rsig=rsig*dataScale,rtx=rtx,flen=flen,prefix=gdfprefix,nameadd=NULL)
+  rsig[rtx] <- rsig[rtx]*txScale
+  rsig[!rtx] <- rsig[!rtx]*echoScale
+  writeSimuDataFile.gdf(fnum=gdfnum,rsig=rsig,rtx=rtx,flen=flen,prefix=gdfprefix,nameadd=NULL)
   invisible()
 }
 

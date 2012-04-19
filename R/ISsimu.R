@@ -325,10 +325,10 @@ addRandomNoise <- function(ddir='.',prefix='simudata-',std=1,firstfile=1,lastfil
         writeSimuDataFile(k,rsig,rtx,flen,nameadd=paste('_noise_',as.character(std),sep=''),fileType='Rdata')
       }else{
         flen  <- file.info(fname)$size/4
-        rdata <- readRawData(fname,flen)
-        necho <- sum(!rdata$TX)
-        rdata$data[!rdata$TX] <- ( rdata$data[!rdata$TX] +  rnorm(necho,0,std) + 1i*rnorm(necho,0,std) ) * echoScale
-        writeSimuDataFile(k,rdata$data/2**14,rdata$TX,flen,nameadd=paste('_noise_',as.character(std),sep=''),fileType='gdf')
+        rdata <- readData.gdf(fname,flen)
+        necho <- sum(!rdata$idatai)
+        rdata$cdata[!rdata$idatai] <- ( rdata$cdata[!rdata$idatai] +  rnorm(necho,0,std) + 1i*rnorm(necho,0,std) ) * echoScale
+        writeSimuDataFile(k,rdata$cdata/2**14,rdata$idatai,flen,nameadd=paste('_noise_',as.character(std),sep=''),fileType='gdf')
       }
     }else{
       nmiss <- nmiss + 1

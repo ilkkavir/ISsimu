@@ -5,6 +5,25 @@
 # I. Virtanen 2010, 2012
 #
 
+writeTimestampsFile.gdf <- function(prefix='data-',extension='.gdf',nstart=1,nend=1,times=c(0),fname='timestamps.log'){
+
+
+  fid <- file(fname,'w')
+  cat('',file=fid)
+  times <- rep(times,length.out=(nend-nstart+1))
+
+  for(k in seq(nstart,nend)){
+
+    cnum <- sprintf('%.0f',k)
+    nc   <- nchar(cnum)
+    stmpstr <- paste(prefix,substr('000000',1,6-nc),cnum,'.gdf ',sprintf('%20.8f',times[k-nstart+1]),sep='')
+    cat(stmpstr,'\n',file=fid,append=TRUE)
+    print(stmpstr)
+  }
+
+  close(fid)
+
+}
 
 TXenv <- function(exp){
 # 
@@ -16,8 +35,18 @@ TXenv <- function(exp){
 #  baudLength is the length of a single baud in the phase-coding; each element of each code is repeated baudLength times in the envelope
 # 
 # 
-# I. Virtanen 2010
-# 
+# I. Virtanen 2010, 2012
+#
+
+  # mach the lengths of IPP and code cycles
+  nipp  <- length(exp$IPP)
+  ncode <- length(exp$code)
+  nmax  <- max(nipp,ncode)
+  nmin  <- min(nipp,ncode)
+  k <- 1
+  while((k*nmax)%%nmin) k <- k+1
+  exp$IPP <- rep(exp$IPP,(k*nmax/nipp))
+  exp$code <- rep(exp$code,(k*nmax/ncode))
 
   env <- rep((0+0i),sum(exp$IPP))
 

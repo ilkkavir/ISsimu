@@ -645,3 +645,43 @@ IQ2real <- function(iqsig,t=seq(length(iqsig)),cfreq,nfilter){
 }
 
 
+correlatedNoise <- function(spectrum,overlap,n,rnorm0=(rnorm(length(spectrum))+1i*rnorm(length(spectrum)))/sqrt(2)){
+  # Random noise signal with power spectral density given in spectrum
+  #
+  # INPUT:
+  #   spectrum   a real vector of the power spectral density
+  #   overlap    hard to explain, see the code... overlap < length(spectrum)!
+  #   n          number of points to simulate
+  #   rnorm0     a random non-correlated signal. This can be picked from the output of a previous function call
+  #              to guarantee that outputs from consequtive calls have proper correlation properties.
+  #
+  # I. Virtanen 2012
+  #
+
+  ns <- length(spectrum)
+  if(length(rnorm0)!=ns){
+    warning("Lengths of spectrum and rnorm0 do not match, replacing rnorm0 with a random sequence")
+    rnorm0 <- (rnorm(ns)+1i*rnorm(ns))/sqrt(2)
+  }
+
+  outlist <- list()
+
+  outlist$signal <- rep((0+0i),n)
+
+  specsqr <- sqrt(spectrum)
+  
+  k <- 1
+  while(k<n){
+    sigcor <- fft( fft(rnorm0) * specsqr , inverse=TRUE) /sqrt(ns)
+    m <- min((n-k),(ns-overlap))
+    outlist$signal[k:(k+m-1)] <- sigcor[1:m]
+    rnorm0[1:(ns-m)] <- rnorm0[(m+1):ns]
+    rnorm0[(ns-m+1):ns] <- (rnorm(m)+1i*rnorm(m))/sqrt(2)
+    k <- k+ns-overlap
+  }
+
+  outlist$rnorm0=rnorm0
+
+  return(outlist)
+  
+}

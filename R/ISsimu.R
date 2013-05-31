@@ -586,7 +586,7 @@ ISsimu.iri <- function(time=c(2000,1,1,11,0,0),latitude=69.5864,longitude=19.227
 
 #  # timestamps file
 #  fid         <- file('timestamps.log','w')
-#  unixtime    <- makeUnixTime(time) 
+  unixtime    <- makeUnixTime(time) 
 #  cat(paste('simudata-000001.gdf ',as.character(unixtime),'.0000000',sep=''),'\n',file=fid)
 #  close(fid)
 

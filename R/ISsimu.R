@@ -415,7 +415,7 @@ DABpowerSpectrum <- function( transmissionMode=1 , f=seq(-2e6,2e6,by=10) , centr
 
 
 
-ISsimu.general <- function(ISspectra,rmin=1,TXenvelope,flen=1000000,fileType=c('Rdata','gdf'),time0=0,timestep=flen/1e6){
+ISsimu.general <- function(ISspectra,rmin=1,TXenvelope,flen=1000000,fileType=c('Rdata','gdf'),time0=0,timestep=flen/1e6,nfile=Inf){
 # 
 # simulated incoherent scatter radar signal with power spectral densities given in ISspectra
 #
@@ -497,6 +497,7 @@ ISsimu.general <- function(ISspectra,rmin=1,TXenvelope,flen=1000000,fileType=c('
         writeTimestampsFile.gdf(prefix='simudata-',extension='.gdf',nstart=1,nend=fnum,times=(seq(fnum)-1)*timestep+time0,fname='timestamps.log')
         fnum <- fnum + 1
         snum <- 1
+        if(fnum>nfile) return()
       }
 
       # tx envelope is cycled
@@ -517,7 +518,7 @@ ISsimu.general <- function(ISspectra,rmin=1,TXenvelope,flen=1000000,fileType=c('
 
 
 
-ISsimu.iri <- function(time=c(2000,1,1,11,0,0),latitude=69.5864,longitude=19.2272,hmin=50,hmax=1.0e3,sampFreq=1.0e5,experiment=list(code=list(c(1)),IPP=c(10000),baudLength=c(1000)),radarFreq=233e6,flen=1000000,spectrumScale=1e30,fileType=c('Rdata','gdf')){
+ISsimu.iri <- function(time=c(2000,1,1,11,0,0),latitude=69.5864,longitude=19.2272,hmin=50,hmax=1.0e3,sampFreq=1.0e5,experiment=list(code=list(c(1)),IPP=c(10000),baudLength=c(1000)),radarFreq=233e6,flen=1000000,spectrumScale=1e30,fileType=c('Rdata','gdf'),nfile=Inf){
 # 
 # simulated incoherent scatter radar signal with plasma parameters taken from ionospheric models
 # 
@@ -591,7 +592,7 @@ ISsimu.iri <- function(time=c(2000,1,1,11,0,0),latitude=69.5864,longitude=19.227
 #  close(fid)
 
 
-  ISsimu.general( ISspectra=spectrump , rmin=rmin , TXenvelope=tx , flen=flen ,fileType=fileType[1] , time0=unixtime , timestep=flen/sampFreq)
+  ISsimu.general( ISspectra=spectrump , rmin=rmin , TXenvelope=tx , flen=flen ,fileType=fileType[1] , time0=unixtime , timestep=flen/sampFreq ,  nfile=nfile)
 
 } #ISsimu.iri
 

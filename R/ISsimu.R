@@ -415,7 +415,7 @@ DABpowerSpectrum <- function( transmissionMode=1 , f=seq(-2e6,2e6,by=10) , centr
 
 
 
-ISsimu.general <- function(ISspectra,rmin=1,TXenvelope,flen=1000000,fileType=c('Rdata','gdf')){
+ISsimu.general <- function(ISspectra,rmin=1,TXenvelope,flen=1000000,fileType=c('Rdata','gdf'),time0=0,timestep=flen/1e6){
 # 
 # simulated incoherent scatter radar signal with power spectral densities given in ISspectra
 #
@@ -494,6 +494,7 @@ ISsimu.general <- function(ISspectra,rmin=1,TXenvelope,flen=1000000,fileType=c('
       # if the data vector is full, write a new data file
       if(snum>flen){
         writeSimuDataFile( fnum=fnum , rsig=rsig , rtx=rtx , flen=flen , fileType=fileType[1] )
+        writeTimestampsFile.gdf(prefix='simudata-',extension='.gdf',nstart=1,nend=fnum,times=seq(fnum)*timestep+time0,fname='timestamps.log')
         fnum <- fnum + 1
         snum <- 1
       }
@@ -583,14 +584,14 @@ ISsimu.iri <- function(time=c(2000,1,1,11,0,0),latitude=69.5864,longitude=19.227
   }
 
 
-  # timestamps file
-  fid         <- file('timestamps.log','w')
-  unixtime    <- makeUnixTime(time) 
-  cat(paste('simudata-000001.gdf ',as.character(unixtime),'.0000000',sep=''),'\n',file=fid)
-  close(fid)
+#  # timestamps file
+#  fid         <- file('timestamps.log','w')
+#  unixtime    <- makeUnixTime(time) 
+#  cat(paste('simudata-000001.gdf ',as.character(unixtime),'.0000000',sep=''),'\n',file=fid)
+#  close(fid)
 
 
-  ISsimu.general( ISspectra=spectrump , rmin=rmin , TXenvelope=tx , flen=flen ,fileType=fileType[1] )
+  ISsimu.general( ISspectra=spectrump , rmin=rmin , TXenvelope=tx , flen=flen ,fileType=fileType[1] , time0=unixtime , timestep=flen/sampFreq)
 
 } #ISsimu.iri
 

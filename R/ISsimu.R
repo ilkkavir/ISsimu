@@ -494,7 +494,7 @@ ISsimu.general <- function(ISspectra,rmin=1,TXenvelope,flen=1000000,fileType=c('
       # if the data vector is full, write a new data file
       if(snum>flen){
         writeSimuDataFile( fnum=fnum , rsig=rsig , rtx=rtx , flen=flen , fileType=fileType[1] )
-        writeTimestampsFile.gdf(prefix='simudata-',extension='.gdf',nstart=1,nend=fnum,times=seq(fnum)*timestep+time0,fname='timestamps.log')
+        writeTimestampsFile.gdf(prefix='simudata-',extension='.gdf',nstart=1,nend=fnum,times=(seq(fnum)-1)*timestep+time0,fname='timestamps.log')
         fnum <- fnum + 1
         snum <- 1
       }

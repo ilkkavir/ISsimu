@@ -687,3 +687,142 @@ correlatedNoise <- function(spectrum,overlap,n,rnorm0=(rnorm(length(spectrum))+1
   return(outlist)
   
 }
+
+
+
+ISspectrum.iriEs <- function( time = c(2000,1,1,11,0,0) , latitude=69.58864 , longitude=19.2272 , hEs=105 , widthEs=.5 , peakEs=1e12, heights=seq(1,1000) , fradar=233e6,scattAngle=180,freq=seq(-1000,1000)*4,savePlasmaParams=FALSE)
+{
+                                        # incoherent scatter spectrum of on IRI plasma parameter profile with an additional Es layer
+                                        #
+                                        #
+                                        #
+                                        #
+                                        #
+
+    
+    iripar <- iriParams( time=time , latitude=latitude , longitude=longitude , heights=heights)
+
+
+    # the iri model returns -1 at heights where densities are not calculated
+    ions <- c('O+','H+','He+','O2+','N+','NO+')
+    neutrals <- c('O','H','He','O2','N','N2')
+
+    for(n in c(ions,neutrals)) iripar[n,iripar[n,]<0] <- 0
+
+    # add the Es layer
+    NeEs <- exp(-(heights-hEs)^2/widthEs^2)*peakEs
+    iripar['e-',] <- iripar['e-',] + NeEs
+    iripartmp <- iripar
+    dimiripar <- dim(iripar)
+    irinames  <- dimnames(iripar)
+    iripar <- matrix(nrow=dimiripar[1]+1,ncol=dimiripar[2])
+    irinames[[1]] <- c(irinames[[1]],'Fe+')
+    iripar[1:dimiripar[1],] <- iripartmp
+    iripar[dimiripar[1]+1,] <- NeEs
+    dimnames(iripar) <- irinames
+    
+    if(savePlasmaParams) save(iripar,file='ISspectrum.iriEs.PlasmaParam.Rdata')
+
+    nh <- length(heights)
+    nf <- length(freq)
+    spectra <- matrix(nrow=nh,ncol=nf)
+    for(k in seq(nh)){
+
+      cfreq <- ionNeutralCollisionFrequency(iripar[,k])
+      ele <- c(iripar[c('e-','Te'),k],0,0)
+      ion <- list(
+                  c(16,iripar[c('O+','Ti') , k] ,sum(cfreq['O+',]) ,0),
+                  c(1 ,iripar[c('H+','Ti') , k] ,sum(cfreq['H+',]) ,0),
+                  c(56,iripar[c('Fe+','Ti'), k] ,sum(cfreq['NO+',]),0),# to have there some number..
+                  c(32,iripar[c('O2+','Ti'), k] ,sum(cfreq['O2+',]),0),
+                  c(14,iripar[c('N+','Ti') , k] ,sum(cfreq['N+',]) ,0),
+                  c(30,iripar[c('NO+','Ti'), k] ,sum(cfreq['NO+',]),0)
+                  )
+
+      spectra[k,] <- ISspectrum.general( ele=ele , ion=ion , fradar=fradar , scattAngle=scattAngle , freq=freq)
+
+    }
+
+    return(spectra)
+  }
+
+
+
+ISsimu.iriEs <- function(time=c(2000,1,1,11,0,0),latitude=69.5864,longitude=19.2272,hmin=50,hmax=1.0e3,hEs=105 , widthEs=.5 , peakEs=1e12 ,sampFreq=1.0e5,experiment=list(code=list(c(1)),IPP=c(10000),baudLength=c(1000)),radarFreq=233e6,flen=1000000,spectrumScale=1e30,fileType=c('Rdata','gdf'),nfile=Inf){
+# 
+# simulated incoherent scatter radar signal with plasma parameters taken from ionospheric models
+# 
+# time = c(year,month,day,hour,minute,second)  UT
+# latitude and longitude in degrees
+# hmax = the maximum height in km
+# sampFreq = sampling frequency in Hz
+# experiment = list(list(code),c(ipps),c(baudlengths)) # in us
+# radarFreq in Hz
+# flen  = number of complex samples in a single data file
+# spectrumScale = normalisation factor of the spectrum to keep the signal level inside the dynamic range of the data format
+# 
+
+  # save the simulation parameters
+  simuParam   <- list(time=time,latitude=latitude,longitude=longitude,hmin=hmin,hmax=hmax,sampFreq=sampFreq,
+                     experiment=experiment,radarFreq=radarFreq,p_m0=c(30.5,16.0,1.0),flen=flen,spectrumScale=spectrumScale,hEs=hEs,widthEs=widthEs,peakEs=peakEs)
+  save(simuParam,file='ISsimu.iriEsParam.Rdata')
+
+
+  # the transmission envelope
+  experiment$IPP <- floor(experiment$IPP*sampFreq/1e6)
+  experiment$baudLength <- max(floor(experiment$baudLength*sampFreq/1e6),1)
+  tx          <- TXenv(experiment)
+  txlen       <- length(tx)
+
+  # create the frequency axis for IS spectrum calculation
+  fmax        <- min(8*radarFreq/100000,sampFreq/2)
+  nf          <- 2*round(fmax/10)
+  freqs       <- c(seq(0,(nf/2)),seq((-nf/2+1),-1))*10.0
+  heights     <- seq(hmin,hmax,by=(1.0e6*.149896229)/sampFreq)
+
+  # range in time units
+  ranges      <- floor(heights/(299792.458/2)*sampFreq)
+
+  # remove 0-heights
+  heights     <- heights[ranges>0]
+  ranges      <- ranges[ranges>0]
+
+  # the spectrum 
+  spectrum    <- ISspectrum.iriEs( time=time , latitude=latitude , longitude=longitude , heights=heights , , hEs=hEs , widthEs=widthEs , peakEs=peakEs , freq=freqs , fradar=radarFreq , savePlasmaParams=TRUE)
+
+  # fill in the missing values (they really are zeros!), and normalize the spectrum
+  spectrum[is.na(spectrum)] <- 0
+  spectrum <- spectrum*spectrumScale
+  # there will be some negative values due to numerical inaccuracies, set them to zero
+  spectrum[spectrum<0] <- 0
+
+  # smallest and largest range
+  rmin        <- min(ranges)
+  rmax        <- max(ranges)
+
+  # zero-padding and shifting the zero-frequency to the first column
+  fdiff       <- floor(sampFreq/10)-nf
+  nh          <- length(heights)
+  nc          <- nf/2
+  nf2         <- nf + fdiff
+  spectrump <- matrix(0,nrow=nh,ncol=nf2)
+  spectrump[,1:nc] <- spectrum[,1:nc]
+  spectrump[,(nc+fdiff+1):nf2] <- spectrum[,(nc+1):nf]
+
+  # scale with range squared
+  for(k in seq(nh)){
+    spectrump[k,] <- spectrump[k,] / (ranges[k] *  sampFreq )**2
+  }
+
+
+#  # timestamps file
+#  fid         <- file('timestamps.log','w')
+  unixtime    <- makeUnixTime(time) 
+#  cat(paste('simudata-000001.gdf ',as.character(unixtime),'.0000000',sep=''),'\n',file=fid)
+#  close(fid)
+
+
+  ISsimu.general( ISspectra=spectrump , rmin=rmin , TXenvelope=tx , flen=flen ,fileType=fileType[1] , time0=unixtime , timestep=flen/sampFreq ,  nfile=nfile)
+
+} #ISsimu.iriEs
+

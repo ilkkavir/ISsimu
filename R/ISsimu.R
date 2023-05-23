@@ -415,7 +415,7 @@ DABpowerSpectrum <- function( transmissionMode=1 , f=seq(-2e6,2e6,by=10) , centr
 
 
 
-ISsimu.general <- function(ISspectra,rmin=1,TXenvelope,flen=1000000,fileType=c('Rdata','gdf'),time0=0,timestep=flen/1e6,nfile=Inf){
+ISsimu.general <- function(ISspectra,rmin=1,TXenvelope,flen=1000000,fileType=c('Rdata','gdf'),time0=0,timestep=flen/1e6,nfile=Inf,sampFreq=1e6){
 # 
 # simulated incoherent scatter radar signal with power spectral densities given in ISspectra
 #
@@ -447,8 +447,9 @@ ISsimu.general <- function(ISspectra,rmin=1,TXenvelope,flen=1000000,fileType=c('
   # matrix for the correlating signal
   sigcm       <- sigm[,]*0
 
-  # overlap in simulation windows (longest correlation), 10 ms
-  overlap     <- floor(nf/1e4)
+  # overlap in simulation windows (longest correlation), 10 ms or a quarter of the vector length 
+    overlap     <- floor(nf/1e4)
+#    overlap     <- min(floor(sampFreq/1e3),floor(nf/4))
 
   # save the parameters to a file before continuing
   save(ISspectra,rmin,TXenvelope,flen,file='ISsimuParam.Rdata')
@@ -592,7 +593,7 @@ ISsimu.iri <- function(time=c(2000,1,1,11,0,0),latitude=69.5864,longitude=19.227
 #  close(fid)
 
 
-  ISsimu.general( ISspectra=spectrump , rmin=rmin , TXenvelope=tx , flen=flen ,fileType=fileType[1] , time0=unixtime , timestep=flen/sampFreq ,  nfile=nfile)
+  ISsimu.general( ISspectra=spectrump , rmin=rmin , TXenvelope=tx , flen=flen ,fileType=fileType[1] , time0=unixtime , timestep=flen/sampFreq ,  nfile=nfile , sampFreq=sampFreq)
 
 } #ISsimu.iri
 
@@ -692,12 +693,12 @@ correlatedNoise <- function(spectrum,overlap,n,rnorm0=(rnorm(length(spectrum))+1
 
 ISspectrum.iriEs <- function( time = c(2000,1,1,11,0,0) , latitude=69.58864 , longitude=19.2272 , hEs=105 , widthEs=.5 , peakEs=1e12, heights=seq(1,1000) , fradar=233e6,scattAngle=180,freq=seq(-1000,1000)*4,savePlasmaParams=FALSE)
 {
-                                        # incoherent scatter spectrum of on IRI plasma parameter profile with an additional Es layer
-                                        #
-                                        #
-                                        #
-                                        #
-                                        #
+# incoherent scatter spectrum of on IRI plasma parameter profile with an additional Es layer
+#
+#
+#
+#
+#
 
     
     iripar <- iriParams( time=time , latitude=latitude , longitude=longitude , heights=heights)
@@ -822,7 +823,72 @@ ISsimu.iriEs <- function(time=c(2000,1,1,11,0,0),latitude=69.5864,longitude=19.2
 #  close(fid)
 
 
-  ISsimu.general( ISspectra=spectrump , rmin=rmin , TXenvelope=tx , flen=flen ,fileType=fileType[1] , time0=unixtime , timestep=flen/sampFreq ,  nfile=nfile)
+  ISsimu.general( ISspectra=spectrump , rmin=rmin , TXenvelope=tx , flen=flen ,fileType=fileType[1] , time0=unixtime , timestep=flen/sampFreq ,  nfile=nfile , sampFreq=sampFreq)
 
 } #ISsimu.iriEs
+
+
+
+
+ISsimu.coherent <- function(time=c(2000,1,1,11,0,0),hmax=1.0e3,hTarget=105,sampFreq=1.0e5,experiment=list(code=list(c(1)),IPP=c(10000),baudLength=c(1000)),radarFreq=233e6,flen=1000000,fileType=c('Rdata','gdf'),nfile=Inf){
+# 
+# simulated radar signal with a coherent point target. 
+#
+# This is calculated with the system that assumes a shortish decorrelation time, so amplitude of the coherent echoes will vary randomly!
+# time = c(year,month,day,hour,minute,seconds) for the timestamps file
+# hmax = the maximum height in km
+# hTarget = height of the simulated coherent target
+# sampFreq = sampling frequency in Hz
+# experiment = list(list(code),c(ipps),c(baudlengths)) # in us
+# radarFreq in Hz
+# flen  = number of complex samples in a single data file
+# 
+
+  # save the simulation parameters
+  simuParam   <- list(hmax=hmax,sampFreq=sampFreq,experiment=experiment,radarFreq=radarFreq,flen=flen,hTarget=hTarget)
+  save(simuParam,file='ISsimu.coherent.Rdata')
+
+
+  # the transmission envelope
+  experiment$IPP <- floor(experiment$IPP*sampFreq/1e6)
+  experiment$baudLength <- max(floor(experiment$baudLength*sampFreq/1e6),1)
+  tx          <- TXenv(experiment)
+  txlen       <- length(tx)
+
+  # create the frequency axis for IS spectrum calculation
+  fmax        <- min(8*radarFreq/100000,sampFreq/2)
+  nf          <- floor(sampFreq/10)
+  freqs       <- c(seq(0,(nf/2)),seq((-nf/2+1),-1))*10.0
+  heights     <- seq(1,hmax,by=(1.0e6*.149896229)/sampFreq)
+  nh          <- length(heights)
+
+  # range in time units
+  ranges      <- floor(heights/(299792.458/2)*sampFreq)
+
+    # target range
+    rTarget  <- floor(hTarget/(299792.458/2)*sampFreq)
+    
+  # remove 0-heights
+  heights     <- heights[ranges>0]
+  ranges      <- ranges[ranges>0]
+
+  # the spectrum 
+  spectrum    <- matrix(0,nh,nf)
+  spectrum[rTarget,1] <- 1
+    
+
+  # smallest and largest range
+  rmin        <- min(ranges)
+  rmax        <- max(ranges)
+
+#  # timestamps file
+#  fid         <- file('timestamps.log','w')
+  unixtime    <- makeUnixTime(time) 
+#  cat(paste('simudata-000001.gdf ',as.character(unixtime),'.0000000',sep=''),'\n',file=fid)
+#  close(fid)
+
+
+  ISsimu.general( ISspectra=spectrum , rmin=rmin , TXenvelope=tx , flen=flen ,fileType=fileType[1] , time0=unixtime , timestep=flen/sampFreq ,  nfile=nfile , fmax=fmax)
+
+} #ISsimu.coherent
 

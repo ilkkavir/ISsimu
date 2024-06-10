@@ -415,103 +415,118 @@ DABpowerSpectrum <- function( transmissionMode=1 , f=seq(-2e6,2e6,by=10) , centr
 
 
 
-ISsimu.general <- function(ISspectra,rmin=1,TXenvelope,flen=1000000,fileType=c('Rdata','gdf'),time0=0,timestep=flen/1e6,nfile=Inf,sampFreq=1e6){
-# 
-# simulated incoherent scatter radar signal with power spectral densities given in ISspectra
-#
-#
-# ISspectra  a matrix with power spectral densities as row-vectors,
-#            first row in ISspectra is spectrum at range rmin. The spectra must be at even range intervals, i.e.
-#            ISspectrum[2,] contains spectrum from range rmin+1, ISspectrum[3,] from rmin+2, etc.
-# rmin       range from which the spectrum in ISspectra[1,] is assumed to be from
-# TXenvelope transmission envelope of the experiment
-# flen       number of samples in each output file
-# fileType   output file format, either 'gdf' (16-bit signed integers) or 'Rdata' (64-bit floats)
-# 
+ISsimu.general <- function(ISspectra,rmin=1,TXenvelope,flen=1000000,fileType=c('Rdata','gdf'),time0=0,timestep=flen/1e6,nfile=Inf,sampFreq=1e6,beamShape=NULL,monostatic=TRUE,odir='simudata',ddir='1'){
+    ## 
+    ## simulated incoherent scatter radar signal with power spectral densities given in ISspectra
+    ##
+    ##
+    ## ISspectra  a matrix with power spectral densities as row-vectors,
+    ##            first row in ISspectra is spectrum at range rmin. The spectra must be at even range intervals, i.e.
+    ##            ISspectrum[2,] contains spectrum from range rmin+1, ISspectrum[3,] from rmin+2, etc.
+    ## rmin       range from which the spectrum in ISspectra[1,] is assumed to be from
+    ## TXenvelope transmission envelope of the experiment
+    ## flen       number of samples in each output file
+    ## fileType   output file format, either 'gdf' (16-bit signed integers) or 'Rdata' (64-bit floats)
+    ## time0      timestamp of the first file
+    ## timestep   data file duration in seconds
+    ## sampFreq   sampling rate in Hz
+    ## beamShape  an optional beam shape pattern, with which the data are multiplied. length(beamShape) = dim(ISspectra)[1]
+    ## monostatic logical, is this monostatic measurement?
+    ## odir       output directory
+    ## ddir       data file directory within odir
 
-  # number of frequencies and number of ranges
-  sdims <- dim(ISspectra)
-  nh <- sdims[1]
-  nf <- sdims[2]
-  rmax <- rmin + nh - 1
+    ## create the output directory
+    dir.create(file.path(odir,ddir),recursive=TRUE,showWarnings=FALSE)
+    
+    ## number of frequencies and number of ranges
+    sdims <- dim(ISspectra)
+    nh <- sdims[1]
+    nf <- sdims[2]
+    rmax <- rmin + nh - 1
+    
+    ## assume monostatic measurement if beamshape is missing
+    if(is.null(beamShape)){
+        beamShape <- rep(1,nh)
+    }
+        
+    ## squareroot of the spectra
+    ISspectraSqr <- t(sqrt(ISspectra))
+    
+    ## matrix for the non-correlating random signal
+    sigm        <- matrix(ncol=nh,nrow=nf)
+    
+    ## initial random signal
+    sigm[,]     <- rnorm(nf*nh) + 1i*rnorm(nf*nh)
+    
+    ## matrix for the correlating signal
+    sigcm       <- sigm[,]*0
 
-  # squareroot of the spectra
-  ISspectraSqr <- t(sqrt(ISspectra))
-
-  # matrix for the non-correlating random signal
-  sigm        <- matrix(ncol=nh,nrow=nf)
-  
-  # initial random signal
-  sigm[,]     <- rnorm(nf*nh) + 1i*rnorm(nf*nh)
-
-  # matrix for the correlating signal
-  sigcm       <- sigm[,]*0
-
-  # overlap in simulation windows (longest correlation), 10 ms or a quarter of the vector length 
+    ## overlap in simulation windows (longest correlation), 10 ms or a quarter of the vector length 
     overlap     <- floor(nf/1e4)
 #    overlap     <- min(floor(sampFreq/1e3),floor(nf/4))
 
-  # save the parameters to a file before continuing
-  save(ISspectra,rmin,TXenvelope,flen,file='ISsimuParam.Rdata')
+    ## save the parameters to a file before continuing
+    save(ISspectra,rmin,TXenvelope,flen,beamShape,file=file.path(odir,'ISsimuParam.Rdata'))
 
-  # vectors for the radar signal and tx bits
-  rsig        <- rep((0+0i),flen)
-  rtx         <- rep(F,flen)
+    ## vectors for the radar signal and tx bits
+    rsig        <- rep((0+0i),flen)
+    rtx         <- rep(F,flen)
 
-  # an infinite loop, break with ctrl-c
-  fnum        <- 1 # current file
-  snum        <- 1 # current sample index in file
-  tnum        <- 1 # current index in the transmission signal (tx) vector
-
-  tx <- TXenvelope/2**14
-  txlen <- length(tx)
-  repeat{
-
-
-    gc()
+    ## an infinite loop, break with ctrl-c
+    fnum        <- 1 # current file
+    snum        <- 1 # current sample index in file
+    tnum        <- 1 # current index in the transmission signal (tx) vector
     
-    # create proper correlating signals at all ranges
-#    for(k in seq(1,nh)) sigcm[k,] <- fft( ( fft(sigm[k,]) * ISspectraSqr[k,] ) , inverse=T ) / nf
-    sigcm <- mvfft( ( mvfft(sigm) * ISspectraSqr ) ,inverse=TRUE ) / nf
+    tx <- TXenvelope/2**14
+    txlen <- length(tx)
+    repeat{
+        
+        
+        gc()
+        
+    ## create proper correlating signals at all ranges
+##    for(k in seq(1,nh)) sigcm[k,] <- fft( ( fft(sigm[k,]) * ISspectraSqr[k,] ) , inverse=T ) / nf
+        sigcm <- mvfft( ( mvfft(sigm) * ISspectraSqr ) ,inverse=TRUE ) / nf
 
-    # signal values
-    for(k in seq((nf-overlap))){
+        ## signal values
+        for(k in seq((nf-overlap))){
+            
+            ## if the radar is transmitting and this is a monostatic system, simply copy the TX signal
+            if(tx[tnum]!=0 & monostatic){
+                rsig[snum] <- tx[tnum]
+                rtx[snum]  <- TRUE
+            }else{
+                ## proper part of the envelope
+                curenv     <- currentEnvelope(tx,tnum,txlen,rmin,rmax)
+                # sum contributions from different ranges, taking into account the beam intersection 
+                rsig[snum] <- sum(sigcm[k,]*curenv*beamShape)
+                rtx[snum]  <- FALSE
+            }
 
-      # if the radar is transmitting, simply copy the TX signal
-      if(tx[tnum]!=0){
-        rsig[snum] <- tx[tnum]
-        rtx[snum]  <- TRUE
-      }else{
-        # proper part of the envelope
-        curenv     <- currentEnvelope(tx,tnum,txlen,rmin,rmax) 
-        rsig[snum] <- sum(sigcm[k,]*curenv)
-        rtx[snum]  <- FALSE
-      }
-
-      # increase counters
-      snum <- snum + 1
-      tnum <- tnum + 1
-
-      # if the data vector is full, write a new data file
-      if(snum>flen){
-        writeSimuDataFile( fnum=fnum , rsig=rsig , rtx=rtx , flen=flen , fileType=fileType[1] )
-        writeTimestampsFile.gdf(prefix='simudata-',extension='.gdf',nstart=1,nend=fnum,times=(seq(fnum)-1)*timestep+time0,fname='timestamps.log')
-        fnum <- fnum + 1
-        snum <- 1
-        if(fnum>nfile) return()
-      }
-
-      # tx envelope is cycled
-      if(tnum>txlen) tnum <- 1
-
+            ## increase counters
+            snum <- snum + 1
+            tnum <- tnum + 1
+            
+            ## if the data vector is full, write a new data file
+            if(snum>flen){
+                writeSimuDataFile( fnum=fnum , rsig=rsig , rtx=rtx , flen=flen , fileType=fileType[1] , prefix=file.path(odir,ddir,'simudata') )
+                writeTimestampsFile.gdf(prefix='simudata-',extension='.gdf',nstart=1,nend=fnum,times=(seq(fnum)-1)*timestep+time0,fname=file.path(odir,'timestamps.log'))
+                fnum <- fnum + 1
+                snum <- 1
+                if(fnum>nfile) return()
+            }
+            
+            ## tx envelope is cycled
+            if(tnum>txlen) tnum <- 1
+            
+        }
+        
+        ## shift the overlapping part of sigm and generate new random signals
+        if(overlap>0) sigm[1:overlap,] <- sigm[(nf-overlap+1):nf,]
+        sigm[(max(overlap,0)+1):nf,]          <- rnorm((nf-max(overlap,0))*nh) + 1i*rnorm((nf-max(overlap,0))*nh)
+        
     }
-
-    # shift the overlapping part of sigm and generate new random signals
-    if(overlap>0) sigm[1:overlap,] <- sigm[(nf-overlap+1):nf,]
-    sigm[(max(overlap,0)+1):nf,]          <- rnorm((nf-max(overlap,0))*nh) + 1i*rnorm((nf-max(overlap,0))*nh)
-
-  }
-
+    
 } #ISsimu.general
 
 
@@ -519,82 +534,119 @@ ISsimu.general <- function(ISspectra,rmin=1,TXenvelope,flen=1000000,fileType=c('
 
 
 
-ISsimu.iri <- function(time=c(2000,1,1,11,0,0),latitude=69.5864,longitude=19.2272,hmin=50,hmax=1.0e3,sampFreq=1.0e5,experiment=list(code=list(c(1)),IPP=c(10000),baudLength=c(1000)),radarFreq=233e6,flen=1000000,spectrumScale=1e30,fileType=c('Rdata','gdf'),nfile=Inf){
-# 
-# simulated incoherent scatter radar signal with plasma parameters taken from ionospheric models
-# 
-# time = c(year,month,day,hour,minute,second)  UT
-# latitude and longitude in degrees
-# hmax = the maximum height in km
-# sampFreq = sampling frequency in Hz
-# experiment = list(list(code),c(ipps),c(baudlengths)) # in us
-# radarFreq in Hz
-# flen  = number of complex samples in a single data file
-# spectrumScale = normalisation factor of the spectrum to keep the signal level inside the dynamic range of the data format
-# 
+ISsimu.iri <- function(time=c(2000,1,1,11,0,0),latitude=69.5864,longitude=19.2272,hmin=50,hmax=1.0e3,sampFreq=1.0e5,experiment=list(code=list(c(1)),IPP=c(10000),baudLength=c(1000)),radarFreq=233e6,flen=1000000,spectrumScale=1e30,fileType=c('Rdata','gdf'),nfile=Inf,RXdist=0,RXele=90,RXbeamwidth,phArr=TRUE){
+    ##
+    ## simulated incoherent scatter radar signal with plasma parameters taken from ionospheric models
+    ##
+    ## time = c(year,month,day,hour,minute,second)  UT
+    ## latitude and longitude in degrees
+    ## hmax = the maximum height in km
+    ## sampFreq = sampling frequency in Hz
+    ## experiment = list(list(code),c(ipps),c(baudlengths)) # in us
+    ## radarFreq in Hz
+    ## flen  = number of complex samples in a single data file
+    ## spectrumScale = normalisation factor of the spectrum to keep the signal level inside the dynamic range of the data format
+    ##
+    
+    ## save the simulation parameters
+    simuParam   <- list(time=time,latitude=latitude,longitude=longitude,hmin=hmin,hmax=hmax,sampFreq=sampFreq,
+                        experiment=experiment,radarFreq=radarFreq,p_m0=c(30.5,16.0,1.0),flen=flen,spectrumScale=spectrumScale,RXdist=RXdist,RXele=RXele,RXbeamwidth=RXbeamwidth)
+    save(simuParam,file='ISsimu.iriParam.Rdata')
+    
+    
+    ## the transmission envelope
+    experiment$IPP <- floor(experiment$IPP*sampFreq/1e6)
+    experiment$baudLength <- max(floor(experiment$baudLength*sampFreq/1e6),1)
+    tx          <- TXenv(experiment)
+    txlen       <- length(tx)
+    
+    ## create the frequency axis for IS spectrum calculation
+    fmax        <- min(8*radarFreq/100000,sampFreq/2)
+    nf          <- 2*round(fmax/10)
+    freqs       <- c(seq(0,(nf/2)),seq((-nf/2+1),-1))*10.0
+    heights     <- seq(hmin,hmax,by=(1.0e6*.149896229)/sampFreq)
 
-  # save the simulation parameters
-  simuParam   <- list(time=time,latitude=latitude,longitude=longitude,hmin=hmin,hmax=hmax,sampFreq=sampFreq,
-                     experiment=experiment,radarFreq=radarFreq,p_m0=c(30.5,16.0,1.0),flen=flen,spectrumScale=spectrumScale)
-  save(simuParam,file='ISsimu.iriParam.Rdata')
+    
+    beamShapeMono <- NULL
+    rangesMono      <- floor(heights/(299792.458/2)*sampFreq)
+    ## remove 0-heights
+    heights     <- heights[rangesMono>0]
+    rangesMono <- rangesMono[rangesMono>0]
+    
+    ## receiver beam shape and range (signal roundtrip time)
+    if(RXdist==0){ ## monostatic
+        
 
+        monostatic <- TRUE
 
-  # the transmission envelope
-  experiment$IPP <- floor(experiment$IPP*sampFreq/1e6)
-  experiment$baudLength <- max(floor(experiment$baudLength*sampFreq/1e6),1)
-  tx          <- TXenv(experiment)
-  txlen       <- length(tx)
+    }else{ ## bistatic
+        ## roundtrip times
+        rangesBi <- floor( (heights + sqrt(heights**2 + RXdist**2)) / 299792.458  * sampFreq )
+        ## elevation angles for each range
+        RXelevs <- atan(heights/RXdist)*180/pi
+        nRX <- length(RXele)
+        beamShape <- list()
+        for(iRX in seq(nRX)){
+            beamShape[[iRX]] <- exp( -(RXelevs-RXele[[iRX]])**2 / (RXbeamwidth/2.35482*ifelse(phArr,sin(RXele[[iRX]]*pi/180)**2,1))**2 )
+        }
 
-  # create the frequency axis for IS spectrum calculation
-  fmax        <- min(8*radarFreq/100000,sampFreq/2)
-  nf          <- 2*round(fmax/10)
-  freqs       <- c(seq(0,(nf/2)),seq((-nf/2+1),-1))*10.0
-  heights     <- seq(hmin,hmax,by=(1.0e6*.149896229)/sampFreq)
+        monostatic <- FALSE
+    }
+    
+    ## the spectrum (we ignore the spectrum narrowing in bistatic reception, fix later!!) 
+    spectrum    <- ISspectrum.iri( time=time , latitude=latitude , longitude=longitude , heights=heights , freq=freqs , fradar=radarFreq , savePlasmaParams=TRUE)
+    
+    ## fill in the missing values (they really are zeros!), and normalize the spectrum
+    spectrum[is.na(spectrum)] <- 0
+    spectrum <- spectrum*spectrumScale
+    ## there will be some negative values due to numerical inaccuracies, set them to zero
+    spectrum[spectrum<0] <- 0
+    
+    ## smallest and largest range
+    rminMono        <- min(rangesMono)
+    rmaxMono        <- max(rangesMono)
+    
+    ## zero-padding and shifting the zero-frequency to the first column
+    fdiff       <- floor(sampFreq/10)-nf
+    nh          <- length(heights)
+    nc          <- nf/2
+    nf2         <- nf + fdiff
+    spectrump <- matrix(0,nrow=nh,ncol=nf2)
+    spectrump[,1:nc] <- spectrum[,1:nc]
+    spectrump[,(nc+fdiff+1):nf2] <- spectrum[,(nc+1):nf]
+    
+    ## scale with range squared
+    spectrumpMono <- spectrump
+    for(k in seq(nh)){
+        spectrumpMono[k,] <- spectrump[k,] / (rangesMono[k] *  sampFreq )**2
+    }
+    if(!monostatic){
+        rminBi        <- min(rangesBi)
+        rmaxBi        <- max(rangesBi)
+        spectrumpBi <- spectrump
+        for(k in seq(nh)){
+            spectrumpBi[k,] <- spectrump[k,] / (rangesBi[k] *  sampFreq )**2
+        }
 
-  # range in time units
-  ranges      <- floor(heights/(299792.458/2)*sampFreq)
+    }
+    
+    
+    ## ##timestamps file
+    ## fid         <- file('timestamps.log','w')
+    unixtime    <- makeUnixTime(time) 
+    ## cat(paste('simudata-000001.gdf ',as.character(unixtime),'.0000000',sep=''),'\n',file=fid)
+    ## close(fid)
 
-  # remove 0-heights
-  heights     <- heights[ranges>0]
-  ranges      <- ranges[ranges>0]
-
-  # the spectrum 
-  spectrum    <- ISspectrum.iri( time=time , latitude=latitude , longitude=longitude , heights=heights , freq=freqs , fradar=radarFreq , savePlasmaParams=TRUE)
-
-  # fill in the missing values (they really are zeros!), and normalize the spectrum
-  spectrum[is.na(spectrum)] <- 0
-  spectrum <- spectrum*spectrumScale
-  # there will be some negative values due to numerical inaccuracies, set them to zero
-  spectrum[spectrum<0] <- 0
-
-  # smallest and largest range
-  rmin        <- min(ranges)
-  rmax        <- max(ranges)
-
-  # zero-padding and shifting the zero-frequency to the first column
-  fdiff       <- floor(sampFreq/10)-nf
-  nh          <- length(heights)
-  nc          <- nf/2
-  nf2         <- nf + fdiff
-  spectrump <- matrix(0,nrow=nh,ncol=nf2)
-  spectrump[,1:nc] <- spectrum[,1:nc]
-  spectrump[,(nc+fdiff+1):nf2] <- spectrum[,(nc+1):nf]
-
-  # scale with range squared
-  for(k in seq(nh)){
-    spectrump[k,] <- spectrump[k,] / (ranges[k] *  sampFreq )**2
-  }
-
-
-#  # timestamps file
-#  fid         <- file('timestamps.log','w')
-  unixtime    <- makeUnixTime(time) 
-#  cat(paste('simudata-000001.gdf ',as.character(unixtime),'.0000000',sep=''),'\n',file=fid)
-#  close(fid)
-
-
-  ISsimu.general( ISspectra=spectrump , rmin=rmin , TXenvelope=tx , flen=flen ,fileType=fileType[1] , time0=unixtime , timestep=flen/sampFreq ,  nfile=nfile , sampFreq=sampFreq)
-
+    if(monostatic){
+        ISsimu.general( ISspectra=spectrumpMono , rmin=rminMono , TXenvelope=tx , flen=flen ,fileType=fileType[1] , time0=unixtime , timestep=flen/sampFreq ,  nfile=nfile , sampFreq=sampFreq , beamShape=NULL , monostatic=TRUE)
+    }else{
+        simuMono <- mcparallel(ISsimu.general( ISspectra=spectrumpMono , rmin=rminMono , TXenvelope=tx , flen=flen ,fileType=fileType[1] , time0=unixtime , timestep=flen/sampFreq ,  nfile=nfile , sampFreq=sampFreq , beamShape=NULL , monostatic=TRUE , odir='simudata_monostatic'),mc.set.seed=TRUE)
+        simuBi <- list()
+        for(iRX in seq(nRX)){
+            simuBi[[iRX]] <- mcparallel(ISsimu.general( ISspectra=spectrumpBi , rmin=rminBi , TXenvelope=tx , flen=flen ,fileType=fileType[1] , time0=unixtime , timestep=flen/sampFreq ,  nfile=nfile , sampFreq=sampFreq , beamShape=beamShape[[iRX]] , monostatic=FALSE , odir=sprintf("simudata_RXbeam_%03i",iRX)),mc.set.seed=TRUE)
+        }
+        mccollect(list(simuMono,simuBi))
+    }
 } #ISsimu.iri
 
 

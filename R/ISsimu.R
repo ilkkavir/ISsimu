@@ -625,7 +625,8 @@ ISsimu.iri <- function(time=c(2000,1,1,11,0,0),latitude=69.5864,longitude=19.227
         rmaxBi        <- max(rangesBi)
         spectrumpBi <- spectrump
         for(k in seq(nh)){
-            spectrumpBi[k,] <- spectrump[k,] / (rangesBi[k] *  sampFreq )**2
+            ## scaling factor 4 to keep this consistent with the monstatic scaling
+            spectrumpBi[k,] <- spectrump[k,] / ( 4 * (rangesBi[k]-rangesMono[k]/2)  * (rangesMono[k]/2) * sampFreq**2 )
         }
 
     }

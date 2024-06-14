@@ -455,8 +455,8 @@ ISsimu.general <- function(ISspectra,rmin=1,TXenvelope,flen=1000000,fileType=c('
     ## matrix for the non-correlating random signal
     sigm        <- matrix(ncol=nh,nrow=nf)
     
-    ## initial random signal
-    sigm[,]     <- rnorm(nf*nh) + 1i*rnorm(nf*nh)
+    ## initial random signal. sqrt(2) to have unit power
+    sigm[,]     <- ( rnorm(nf*nh) + 1i*rnorm(nf*nh) ) / sqrt(2)
     
     ## matrix for the correlating signal
     sigcm       <- sigm[,]*0
@@ -484,10 +484,9 @@ ISsimu.general <- function(ISspectra,rmin=1,TXenvelope,flen=1000000,fileType=c('
         
         gc()
         
-    ## create proper correlating signals at all ranges
-##    for(k in seq(1,nh)) sigcm[k,] <- fft( ( fft(sigm[k,]) * ISspectraSqr[k,] ) , inverse=T ) / nf
-        sigcm <- mvfft( ( mvfft(sigm) * ISspectraSqr ) ,inverse=TRUE ) / nf
-
+        ## create proper correlating signals at all ranges
+        sigcm <- mvfft( ( mvfft(sigm) * ISspectraSqr ) ,inverse=TRUE ) / sqrt(nf)
+        
         ## signal values
         for(k in seq((nf-overlap))){
             

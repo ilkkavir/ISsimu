@@ -485,7 +485,7 @@ ISsimu.general <- function(ISspectra,rmin=1,TXenvelope,flen=1000000,fileType=c('
         gc()
         
         ## create proper correlating signals at all ranges
-        sigcm <- mvfft( ( mvfft(sigm) * ISspectraSqr ) ,inverse=TRUE ) / sqrt(nf)
+        sigcm <- mvfft( ( mvfft(sigm) * ISspectraSqr ) ,inverse=TRUE ) / nf
         
         ## signal values
         for(k in seq((nf-overlap))){

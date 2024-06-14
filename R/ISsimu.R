@@ -349,14 +349,14 @@ addRandomNoise <- function(ddir='.',prefix='simudata-',std=1,firstfile=1,lastfil
         load(fname)
         ntx        <- sum(rtx)
         necho      <- flen - ntx
-        rsig[!rtx] <- ( rsig[!rtx] + rnorm(necho,0,std) + 1i*rnorm(necho,0,std) ) * echoScale
+        rsig[!rtx] <- ( rsig[!rtx] + ( rnorm(necho,0,std) + 1i*rnorm(necho,0,std) ) / sqrt(2) ) * echoScale
         rsig[rtx]  <- rsig[rtx] * txScale
         writeSimuDataFile(k,rsig,rtx,flen,nameadd=paste('_noise_',as.character(std),sep=''),fileType='Rdata')
       }else{
         flen  <- file.info(fname)$size/4
         rdata <- readData.gdf(fname,flen)
         necho <- sum(!rdata$idatai)
-        rdata$cdata[!rdata$idatai] <- ( rdata$cdata[!rdata$idatai] +  rnorm(necho,0,std) + 1i*rnorm(necho,0,std) ) * echoScale
+        rdata$cdata[!rdata$idatai] <- ( rdata$cdata[!rdata$idatai] +  ( rnorm(necho,0,std) + 1i*rnorm(necho,0,std) ) / sqrt(2) ) * echoScale
         writeSimuDataFile(k,rdata$cdata/2**14,rdata$idatai,flen,nameadd=paste('_noise_',as.character(std),sep=''),fileType='gdf')
       }
     }else{

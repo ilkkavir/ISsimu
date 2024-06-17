@@ -522,7 +522,7 @@ ISsimu.general <- function(ISspectra,rmin=1,TXenvelope,flen=1000000,fileType=c('
         
         ## shift the overlapping part of sigm and generate new random signals
         if(overlap>0) sigm[1:overlap,] <- sigm[(nf-overlap+1):nf,]
-        sigm[(max(overlap,0)+1):nf,]          <- rnorm((nf-max(overlap,0))*nh) + 1i*rnorm((nf-max(overlap,0))*nh)
+        sigm[(max(overlap,0)+1):nf,]          <- (rnorm((nf-max(overlap,0))*nh) + 1i*rnorm((nf-max(overlap,0))*nh))/sqrt(2)
         
     }
     

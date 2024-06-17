@@ -321,51 +321,54 @@ makeUnixTime <- function(time){
 
 } #makeUnixTime
 
-addRandomNoise <- function(ddir='.',prefix='simudata-',std=1,firstfile=1,lastfile=Inf,maxmiss=10,echoScale=1,txScale=1,fileType=c('Rdata','gdf')){
-# 
-# Add random noise to simulated radar data
-# 
-# 
-  
-
-  # read the data and add noise
-  k <- firstfile
-  nmiss <- 0
-  repeat{
-    if(k>lastfile) break
-    if(nmiss>maxmiss) break
-    fchar <- as.character(k)
-    nf <- nchar(fchar)
-    if(tolower(fileType[1])=='rdata'){
-      fname <- file.path(ddir,paste('simudata-',substr('000000',1,(6-nf)),fchar,'.Rdata',sep=''))
-    }else if(tolower(fileType[1])=='gdf'){
-      fname <- file.path(ddir,paste('simudata-',substr('000000',1,(6-nf)),fchar,'.gdf',sep=''))
-    }else{
-      stop(paste('Unknown file type:',fileType[1]))
-    }
-    if(file.exists(fname)){
-      nmiss <- 0
-      if(tolower(fileType[1])=='rdata'){
-        load(fname)
-        ntx        <- sum(rtx)
-        necho      <- flen - ntx
-        rsig[!rtx] <- ( rsig[!rtx] + ( rnorm(necho,0,std) + 1i*rnorm(necho,0,std) ) / sqrt(2) ) * echoScale
-        rsig[rtx]  <- rsig[rtx] * txScale
-        writeSimuDataFile(k,rsig,rtx,flen,nameadd=paste('_noise_',as.character(std),sep=''),fileType='Rdata')
-      }else{
-        flen  <- file.info(fname)$size/4
-        rdata <- readData.gdf(fname,flen)
-        necho <- sum(!rdata$idatai)
-        rdata$cdata[!rdata$idatai] <- ( rdata$cdata[!rdata$idatai] +  ( rnorm(necho,0,std) + 1i*rnorm(necho,0,std) ) / sqrt(2) ) * echoScale
-        writeSimuDataFile(k,rdata$cdata/2**14,rdata$idatai,flen,nameadd=paste('_noise_',as.character(std),sep=''),fileType='gdf')
-      }
-    }else{
-      nmiss <- nmiss + 1
-    }
-    k <- k+1
-  } 
-  
-  
+addRandomNoise <- function(ddir='.',odir='.',prefix='simudata-',nameadd=paste('_noise_',as.character(std),sep=''),std=1,firstfile=1,lastfile=Inf,maxmiss=10,echoScale=1,txScale=1,fileType=c('Rdata','gdf')){
+    ## 
+    ## Add random noise to simulated radar data
+    ## 
+    ## 
+    
+    dir.create(odir,recursive=TRUE,showWarnings=FALSE)
+    
+    ## read the data and add noise
+    k <- firstfile
+    nmiss <- 0
+    repeat{
+        if(k>lastfile) break
+        if(nmiss>maxmiss) break
+        fchar <- as.character(k)
+        nf <- nchar(fchar)
+        if(tolower(fileType[1])=='rdata'){
+            fname <- file.path(ddir,paste('simudata-',substr('000000',1,(6-nf)),fchar,'.Rdata',sep=''))
+        }else if(tolower(fileType[1])=='gdf'){
+            fname <- file.path(ddir,paste('simudata-',substr('000000',1,(6-nf)),fchar,'.gdf',sep=''))
+        }else{
+            stop(paste('Unknown file type:',fileType[1]))
+        }
+        if(file.exists(fname)){
+            nmiss <- 0
+            if(tolower(fileType[1])=='rdata'){
+                load(fname)
+                ntx        <- sum(rtx)
+                necho      <- flen - ntx
+                rsig[!rtx] <- ( rsig[!rtx] + ( rnorm(necho,0,std) + 1i*rnorm(necho,0,std) ) / sqrt(2) ) * echoScale
+                rsig[rtx]  <- rsig[rtx] * txScale
+##                writeSimuDataFile(k,rsig,rtx,flen,nameadd=paste('_noise_',as.character(std),sep=''),fileType='Rdata')
+                writeSimuDataFile(k,rsig,rtx,flen,prefix=file.path(odir,prefix),nameadd=nameadd,fileType='Rdata')
+            }else{
+                flen  <- file.info(fname)$size/4
+                rdata <- readData.gdf(fname,flen)
+                necho <- sum(!rdata$idatai)
+                rdata$cdata[!rdata$idatai] <- ( rdata$cdata[!rdata$idatai] +  ( rnorm(necho,0,std) + 1i*rnorm(necho,0,std) ) / sqrt(2) ) * echoScale
+#                writeSimuDataFile(k,rdata$cdata/2**14,rdata$idatai,flen,nameadd=paste('_noise_',as.character(std),sep=''),fileType='gdf')
+                writeSimuDataFile(k,rdata$cdata/2**14,rdata$idatai,flen,prefix=file.path(odir,prefix),nameadd=nameadd,fileType='gdf')
+            }
+        }else{
+            nmiss <- nmiss + 1
+        }
+        k <- k+1
+    } 
+    
+    
 } # addRandomNoise
 
 
@@ -418,6 +421,9 @@ DABpowerSpectrum <- function( transmissionMode=1 , f=seq(-2e6,2e6,by=10) , centr
 ISsimu.general <- function(ISspectra,rmin=1,TXenvelope,flen=1000000,fileType=c('Rdata','gdf'),time0=0,timestep=flen/1e6,nfile=Inf,sampFreq=1e6,beamShape=NULL,monostatic=TRUE,odir='simudata',ddir='1'){
     ## 
     ## simulated incoherent scatter radar signal with power spectral densities given in ISspectra
+    ##
+    ## In the final simulated data, signal power from range r will be mean(ISspectra[r,])*2**28 (the coefficient 
+    ## comes from TX amplitude scaling.) 
     ##
     ##
     ## ISspectra  a matrix with power spectral densities as row-vectors,

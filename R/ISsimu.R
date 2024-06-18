@@ -539,7 +539,7 @@ ISsimu.general <- function(ISspectra,rmin=1,TXenvelope,flen=1000000,fileType=c('
 
 
 
-ISsimu.iri <- function(time=c(2000,1,1,11,0,0),latitude=69.5864,longitude=19.2272,hmin=50,hmax=1.0e3,sampFreq=1.0e5,experiment=list(code=list(c(1)),IPP=c(10000),baudLength=c(1000)),radarFreq=233e6,flen=1000000,spectrumScale=1e30,fileType=c('Rdata','gdf'),nfile=Inf,RXdist=0,RXele=90,RXbeamwidth,phArr=TRUE){
+ISsimu.iri <- function(time=c(2000,1,1,11,0,0),latitude=69.5864,longitude=19.2272,hmin=50,hmax=1.0e3,sampFreq=1.0e5,experiment=list(code=list(c(1)),IPP=c(10000),baudLength=c(1000)),radarFreq=233e6,flen=1000000,spectrumScale=1e30,fileType=c('Rdata','gdf'),nfile=Inf,RXdist=0,RXele=90,RXbeamwidth=1.7,phArr=TRUE){
     ##
     ## simulated incoherent scatter radar signal with plasma parameters taken from ionospheric models
     ##
@@ -569,43 +569,72 @@ ISsimu.iri <- function(time=c(2000,1,1,11,0,0),latitude=69.5864,longitude=19.227
     fmax        <- min(8*radarFreq/100000,sampFreq/2)
     nf          <- 2*round(fmax/10)
     freqs       <- c(seq(0,(nf/2)),seq((-nf/2+1),-1))*10.0
-    heights     <- seq(hmin,hmax,by=(1.0e6*.149896229)/sampFreq)
+    heightsMono     <- seq(hmin,hmax,by=(1.0e6*.149896229)/sampFreq)
 
     
     beamShapeMono <- NULL
-    rangesMono      <- floor(heights/(299792.458/2)*sampFreq)
+    rangesMono      <- floor(heightsMono/(299792.458/2)*sampFreq)
     ## remove 0-heights
-    heights     <- heights[rangesMono>0]
+    heightsMono     <- heightsMono[rangesMono>0]
     rangesMono <- rangesMono[rangesMono>0]
     
     ## receiver beam shape and range (signal roundtrip time)
     if(RXdist==0){ ## monostatic
         
-
         monostatic <- TRUE
 
     }else{ ## bistatic
-        ## roundtrip times
-        rangesBi <- floor( (heights + sqrt(heights**2 + RXdist**2)) / 299792.458  * sampFreq )
-        ## elevation angles for each range
-        RXelevs <- atan(heights/RXdist)*180/pi
-        nRX <- length(RXele)
-        beamShape <- list()
-        for(iRX in seq(nRX)){
-            beamShape[[iRX]] <- exp( -(RXelevs-RXele[[iRX]])**2 / (RXbeamwidth/2.35482*ifelse(phArr,sin(RXele[[iRX]]*pi/180)**2,1))**2 )
-        }
+        ## roundtrip times ... this is a problem, we should define ranges and convert them into heights... calculate spectra separately for the remote
+        #rangesBi <- floor( (heights + sqrt(heights**2 + RXdist**2)) / 299792.458  * sampFreq )
+        ## elevation angles for each range ... the same problem here, these are not the angles we want (we need angles that correspond to the ranges we measure at the remote)
+        ##
+        ## should look for all bistatic ranges that correspond to heights in the selected altitude interval... should we use radarPointings to calculate these?
+        ##
+        ##
 
+
+        ## ranges at the remote
+        rminBi <- floor( (min(heightsMono) + sqrt(min(heightsMono)**2 + RXdist**2)) / 299792.458  * sampFreq )
+        rmaxBi <- floor( (max(heightsMono) + sqrt(max(heightsMono)**2 + RXdist**2)) / 299792.458  * sampFreq )
+        rangesBi <- seq(rminBi,rmaxBi)
+        ## the corresponding heights, a=RXdist, b=height, r=traveled distance / 2
+        ## c^2 = a^2+b^2
+        ## 2r = b+c
+
+        ## 2r = b + sqrt(a^2+b^2)
+        ## (2r-b)^2 = a^2+b^2
+        ## 4r^2+b^2-4rb = a^2+b^2
+        ## 4r^2-4rb = a^2
+        ## 4rb = 4r^2-a^2
+        ## b = (4r^2-a^2)/4r = r - a^2/4r
+        rangesBikm <- rangesBi * 299792.458 / 2 / sampFreq
+        heightsBi <- rangesBikm - RXdist^2/(4*rangesBikm)
+        nhBi <- length(heightsBi)
+
+        ## elevation angles to each range gate
+        RXelevs <- atan(heightsBi/RXdist)*180/pi
+        ## scattering angles for each elevation
+        scattAngles <- 180 - (90 - RXelevs)
+        ## number of receiver beams
+        nRX <- length(RXele)
+        ## beam shape for each receiver beam
+        beamShapeBi <- list()
+        for(iRX in seq(nRX)){
+            beamShapeBi[[iRX]] <- exp( -(RXelevs-RXele[iRX])**2 / (RXbeamwidth/2.35482*ifelse(phArr,sin(RXele[iRX]*pi/180)**2,1))**2 )
+        }
+        
         monostatic <- FALSE
     }
     
-    ## the spectrum (we ignore the spectrum narrowing in bistatic reception, fix later!!) 
-    spectrum    <- ISspectrum.iri( time=time , latitude=latitude , longitude=longitude , heights=heights , freq=freqs , fradar=radarFreq , savePlasmaParams=TRUE)
+    ## spectrum at the core site
+    spectrumMono    <- ISspectrum.iri( time=time , latitude=latitude , longitude=longitude , heights=heightsMono , freq=freqs , fradar=radarFreq , savePlasmaParams=TRUE)
+    file.rename('ISspectrum.iri.PlasmaParam.Rdata','ISspectrum.iri.PlasmaParam.monostatic.Rdata')
     
     ## fill in the missing values (they really are zeros!), and normalize the spectrum
-    spectrum[is.na(spectrum)] <- 0
-    spectrum <- spectrum*spectrumScale
+    spectrumMono[is.na(spectrumMono)] <- 0
+    spectrumMono <- spectrumMono*spectrumScale
     ## there will be some negative values due to numerical inaccuracies, set them to zero
-    spectrum[spectrum<0] <- 0
+    spectrumMono[spectrumMono<0] <- 0
     
     ## smallest and largest range
     rminMono        <- min(rangesMono)
@@ -613,25 +642,38 @@ ISsimu.iri <- function(time=c(2000,1,1,11,0,0),latitude=69.5864,longitude=19.227
     
     ## zero-padding and shifting the zero-frequency to the first column
     fdiff       <- floor(sampFreq/10)-nf
-    nh          <- length(heights)
+    nhMono      <- length(heightsMono)
     nc          <- nf/2
     nf2         <- nf + fdiff
-    spectrump <- matrix(0,nrow=nh,ncol=nf2)
-    spectrump[,1:nc] <- spectrum[,1:nc]
-    spectrump[,(nc+fdiff+1):nf2] <- spectrum[,(nc+1):nf]
+    spectrumpMono <- matrix(0,nrow=nhMono,ncol=nf2)
+    spectrumpMono[,1:nc] <- spectrumMono[,1:nc]
+    spectrumpMono[,(nc+fdiff+1):nf2] <- spectrumMono[,(nc+1):nf]
     
     ## scale with range squared
-    spectrumpMono <- spectrump
-    for(k in seq(nh)){
-        spectrumpMono[k,] <- spectrump[k,] / (rangesMono[k] *  sampFreq )**2
+    for(k in seq(nhMono)){
+        spectrumpMono[k,] <- spectrumpMono[k,] / (rangesMono[k] *  sampFreq )**2
     }
     if(!monostatic){
-        rminBi        <- min(rangesBi)
-        rmaxBi        <- max(rangesBi)
-        spectrumpBi <- spectrump
-        for(k in seq(nh)){
+        
+        ## the spectra at each altitude. Include 300 km altitude to avoid problems in the interpolation when heightsBi[k] is outside the IRI model coverage
+        spectrumBi    <- ISspectrum.iri( time=time , latitude=latitude , longitude=longitude , heights=heightsBi , freq=freqs , scattAngle=scattAngles , fradar=radarFreq , savePlasmaParams=TRUE)
+        file.rename('ISspectrum.iri.PlasmaParam.Rdata','ISspectrum.iri.PlasmaParam.bistatic.Rdata')
+
+        
+        ## fill in the missing values (they really are zeros!), and normalize the spectrum
+        spectrumBi[is.na(spectrumBi)] <- 0
+        spectrumBi <- spectrumBi*spectrumScale
+        ## there will be some negative values due to numerical inaccuracies, set them to zero
+        spectrumBi[spectrumBi<0] <- 0
+        
+        ## zero-padding and shifting the zero-frequency to the first column
+        spectrumpBi <- matrix(0,nrow=nhBi,ncol=nf2)
+        spectrumpBi[,1:nc] <- spectrumBi[,1:nc]
+        spectrumpBi[,(nc+fdiff+1):nf2] <- spectrumBi[,(nc+1):nf]
+
+        for(k in seq(nhBi)){
             ## scaling factor 4 to keep this consistent with the monstatic scaling
-            spectrumpBi[k,] <- spectrump[k,] / ( 4 * (rangesBi[k]-rangesMono[k]/2)  * (rangesMono[k]/2) * sampFreq**2 )
+            spectrumpBi[k,] <- spectrumpBi[k,] / ( 4 * (rangesBi[k]-rangesMono[k]/2)  * (rangesMono[k]/2) * sampFreq**2 )
         }
 
     }
@@ -649,7 +691,7 @@ ISsimu.iri <- function(time=c(2000,1,1,11,0,0),latitude=69.5864,longitude=19.227
         simuMono <- mcparallel(ISsimu.general( ISspectra=spectrumpMono , rmin=rminMono , TXenvelope=tx , flen=flen ,fileType=fileType[1] , time0=unixtime , timestep=flen/sampFreq ,  nfile=nfile , sampFreq=sampFreq , beamShape=NULL , monostatic=TRUE , odir='simudata_monostatic'),mc.set.seed=TRUE)
         simuBi <- list()
         for(iRX in seq(nRX)){
-            simuBi[[iRX]] <- mcparallel(ISsimu.general( ISspectra=spectrumpBi , rmin=rminBi , TXenvelope=tx , flen=flen ,fileType=fileType[1] , time0=unixtime , timestep=flen/sampFreq ,  nfile=nfile , sampFreq=sampFreq , beamShape=beamShape[[iRX]] , monostatic=FALSE , odir=sprintf("simudata_RXbeam_%03i",iRX)),mc.set.seed=TRUE)
+            simuBi[[iRX]] <- mcparallel(ISsimu.general( ISspectra=spectrumpBi , rmin=rminBi , TXenvelope=tx , flen=flen ,fileType=fileType[1] , time0=unixtime , timestep=flen/sampFreq ,  nfile=nfile , sampFreq=sampFreq , beamShape=beamShapeBi[[iRX]] , monostatic=FALSE , odir=sprintf("simudata_RXbeam_%03i",iRX)),mc.set.seed=TRUE)
         }
         mccollect(list(simuMono,simuBi))
     }

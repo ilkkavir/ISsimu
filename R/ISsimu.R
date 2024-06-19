@@ -620,7 +620,7 @@ ISsimu.iri <- function(time=c(2000,1,1,11,0,0),latitude=69.5864,longitude=19.227
         ## beam shape for each receiver beam
         beamShapeBi <- list()
         for(iRX in seq(nRX)){
-            beamShapeBi[[iRX]] <- exp( -(RXelevs-RXele[iRX])**2 / (RXbeamwidth/2.35482*ifelse(phArr,sin(RXele[iRX]*pi/180)**2,1))**2 )
+            beamShapeBi[[iRX]] <- exp( -.5*(RXelevs-RXele[iRX])**2 / (RXbeamwidth/2.35482*ifelse(phArr,sin(RXele[iRX]*pi/180)**2,1))**2 )
         }
         
         monostatic <- FALSE

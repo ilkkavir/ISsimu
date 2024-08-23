@@ -704,7 +704,7 @@ ISsimu.iri <- function(time=c(2000,1,1,11,0,0),latitude=69.5864,longitude=19.227
             mccollect(list(simuMono,simuBi))
             
         }else{
-            simuRes <- snow::clusterApply( cluster , seq(0,nRX) , ISsimu.selectBeam , ISspectraMono=spectrumpMono , ISspectraBi=spectrumpBi , rminMono=rminMono , rminBi=rminBi , TXenvelope=tx , flen=flen ,fileType=fileType[1] , time0=unixtime , timestep=flen/sampFreq ,  nfile=nfile , sampFreq=sampFreq , beamShape=beamShapeBi )
+            simuRes <- snow::clusterApply( cluster , seq(0,nRX) , ISsimu.selectBeam , ISspectraMono=spectrumpMono , ISspectraBi=spectrumpBi , rminMono=rminMono , rminBi=rminBi , TXenvelope=tx , flen=flen ,fileType=fileType[1] , time0=unixtime , timestep=flen/sampFreq ,  nfile=nfile , sampFreq=sampFreq , beamShape=beamShapeBi , odir=odir )
         }
     }
 } #ISsimu.iri

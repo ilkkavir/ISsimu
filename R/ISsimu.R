@@ -539,7 +539,7 @@ ISsimu.general <- function(ISspectra,rmin=1,TXenvelope,flen=1000000,fileType=c('
 
 
 
-ISsimu.iri <- function(time=c(2000,1,1,11,0,0),latitude=69.5864,longitude=19.2272,hmin=50,hmax=1.0e3,sampFreq=1.0e5,experiment=list(code=list(c(1)),IPP=c(10000),baudLength=c(1000)),radarFreq=233e6,flen=1000000,spectrumScale=1e30,fileType=c('Rdata','gdf'),nfile=Inf,RXdist=0,RXele=90,RXbeamwidth=1.7,phArr=TRUE){
+ISsimu.iri <- function(time=c(2000,1,1,11,0,0),latitude=69.5864,longitude=19.2272,hmin=50,hmax=1.0e3,sampFreq=1.0e5,experiment=list(code=list(c(1)),IPP=c(10000),baudLength=c(1000)),radarFreq=233e6,flen=1000000,spectrumScale=1e30,fileType=c('Rdata','gdf'),nfile=Inf,RXdist=0,RXele=90,RXbeamwidth=1.7,phArr=TRUE,cluster=NULL,odir='simudata'){
     ##
     ## simulated incoherent scatter radar signal with plasma parameters taken from ionospheric models
     ##
@@ -552,11 +552,16 @@ ISsimu.iri <- function(time=c(2000,1,1,11,0,0),latitude=69.5864,longitude=19.227
     ## flen  = number of complex samples in a single data file
     ## spectrumScale = normalisation factor of the spectrum to keep the signal level inside the dynamic range of the data format
     ##
+
+
+
+    dir.create(odir,recursive=TRUE,showWarnings=FALSE)
+
     
     ## save the simulation parameters
     simuParam   <- list(time=time,latitude=latitude,longitude=longitude,hmin=hmin,hmax=hmax,sampFreq=sampFreq,
                         experiment=experiment,radarFreq=radarFreq,p_m0=c(30.5,16.0,1.0),flen=flen,spectrumScale=spectrumScale,RXdist=RXdist,RXele=RXele,RXbeamwidth=RXbeamwidth)
-    save(simuParam,file='ISsimu.iriParam.Rdata')
+    save(simuParam,file=file.path(odir,'ISsimu.iriParam.Rdata'))
     
     
     ## the transmission envelope
@@ -628,7 +633,7 @@ ISsimu.iri <- function(time=c(2000,1,1,11,0,0),latitude=69.5864,longitude=19.227
     
     ## spectrum at the core site
     spectrumMono    <- ISspectrum.iri( time=time , latitude=latitude , longitude=longitude , heights=heightsMono , freq=freqs , fradar=radarFreq , savePlasmaParams=TRUE)
-    file.rename('ISspectrum.iri.PlasmaParam.Rdata','ISspectrum.iri.PlasmaParam.monostatic.Rdata')
+    file.rename('ISspectrum.iri.PlasmaParam.Rdata',file.path(odir,'ISspectrum.iri.PlasmaParam.monostatic.Rdata'))
     
     ## fill in the missing values (they really are zeros!), and normalize the spectrum
     spectrumMono[is.na(spectrumMono)] <- 0
@@ -657,7 +662,7 @@ ISsimu.iri <- function(time=c(2000,1,1,11,0,0),latitude=69.5864,longitude=19.227
         
         ## the spectra at each altitude. Include 300 km altitude to avoid problems in the interpolation when heightsBi[k] is outside the IRI model coverage
         spectrumBi    <- ISspectrum.iri( time=time , latitude=latitude , longitude=longitude , heights=heightsBi , freq=freqs , scattAngle=scattAngles , fradar=radarFreq , savePlasmaParams=TRUE)
-        file.rename('ISspectrum.iri.PlasmaParam.Rdata','ISspectrum.iri.PlasmaParam.bistatic.Rdata')
+        file.rename('ISspectrum.iri.PlasmaParam.Rdata',file.path(odir,'ISspectrum.iri.PlasmaParam.bistatic.Rdata'))
 
         
         ## fill in the missing values (they really are zeros!), and normalize the spectrum
@@ -688,12 +693,19 @@ ISsimu.iri <- function(time=c(2000,1,1,11,0,0),latitude=69.5864,longitude=19.227
     if(monostatic){
         ISsimu.general( ISspectra=spectrumpMono , rmin=rminMono , TXenvelope=tx , flen=flen ,fileType=fileType[1] , time0=unixtime , timestep=flen/sampFreq ,  nfile=nfile , sampFreq=sampFreq , beamShape=NULL , monostatic=TRUE)
     }else{
-        simuMono <- mcparallel(ISsimu.general( ISspectra=spectrumpMono , rmin=rminMono , TXenvelope=tx , flen=flen ,fileType=fileType[1] , time0=unixtime , timestep=flen/sampFreq ,  nfile=nfile , sampFreq=sampFreq , beamShape=NULL , monostatic=TRUE , odir='simudata_monostatic'),mc.set.seed=TRUE)
-        simuBi <- list()
-        for(iRX in seq(nRX)){
-            simuBi[[iRX]] <- mcparallel(ISsimu.general( ISspectra=spectrumpBi , rmin=rminBi , TXenvelope=tx , flen=flen ,fileType=fileType[1] , time0=unixtime , timestep=flen/sampFreq ,  nfile=nfile , sampFreq=sampFreq , beamShape=beamShapeBi[[iRX]] , monostatic=FALSE , odir=sprintf("simudata_RXbeam_%03i",iRX)),mc.set.seed=TRUE)
+        if(is.null(cluster)){
+            
+            simuMono <- mcparallel(ISsimu.general( ISspectra=spectrumpMono , rmin=rminMono , TXenvelope=tx , flen=flen ,fileType=fileType[1] , time0=unixtime , timestep=flen/sampFreq ,  nfile=nfile , sampFreq=sampFreq , beamShape=NULL , monostatic=TRUE , odir=file.path(odir,'simudata_monostatic')),mc.set.seed=TRUE)
+            
+            simuBi <- list()
+            for(iRX in seq(nRX)){
+                simuBi[[iRX]] <- mcparallel(ISsimu.general( ISspectra=spectrumpBi , rmin=rminBi , TXenvelope=tx , flen=flen ,fileType=fileType[1] , time0=unixtime , timestep=flen/sampFreq ,  nfile=nfile , sampFreq=sampFreq , beamShape=beamShapeBi[[iRX]] , monostatic=FALSE , odir=file.path(odir,sprintf("simudata_RXbeam_%03i",iRX))),mc.set.seed=TRUE)
+            }
+            mccollect(list(simuMono,simuBi))
+            
+        }else{
+            simuRes <- snow::clusterApply( cluster , seq(0,nRX) , ISsimu.selectBeam , ISspectraMono=spectrumpMono , ISspectraBi=spectrumpBi , rminMono=rminMono , rminBi=rminBi , TXenvelope=tx , flen=flen ,fileType=fileType[1] , time0=unixtime , timestep=flen/sampFreq ,  nfile=nfile , sampFreq=sampFreq , beamShape=beamShapeBi )
         }
-        mccollect(list(simuMono,simuBi))
     }
 } #ISsimu.iri
 
@@ -989,6 +1001,19 @@ ISsimu.coherent <- function(time=c(2000,1,1,11,0,0),hmax=1.0e3,hTarget=105,sampF
 
 
   ISsimu.general( ISspectra=spectrum , rmin=rmin , TXenvelope=tx , flen=flen ,fileType=fileType[1] , time0=unixtime , timestep=flen/sampFreq ,  nfile=nfile , fmax=fmax)
-
+    
 } #ISsimu.coherent
+    
 
+ISsimu.selectBeam <- function(iBeam,RXele,ISspectraMono,ISspectraBi,rminMono=1,rminBi=1,TXenvelope,flen=1000000,fileType=c('Rdata','gdf'),time0=0,timestep=flen/1e6,nfile=Inf,sampFreq=1e6,beamShape=NULL,odir='simudata',ddir='1'){
+    set.seed(NULL)
+    
+    if(iBeam==0){
+        odirB <- file.path(odir,sprintf("simudata_monostatic") )
+        return(ISsimu.general( ISspectra=ISspectraMono , rmin=rminMono , TXenvelope=TXenvelope , flen=flen ,fileType=fileType , time0=time0 , timestep=timestep ,  nfile=nfile , sampFreq=sampFreq , beamShape=NULL , monostatic=TRUE , odir=odirB , ddir=ddir ))
+    }else{
+        odirB <- file.path(odir,sprintf("simudata_RXbeam_%03i",iBeam) )
+        return(ISsimu.general( ISspectra=ISspectraBi , rmin=rminBi , TXenvelope=TXenvelope , flen=flen ,fileType=fileType , time0=time0 , timestep=timestep ,  nfile=nfile , sampFreq=sampFreq , beamShape=beamShape[[iBeam]] , monostatic=FALSE , odir=odirB , ddir=ddir ))
+    }
+        
+}

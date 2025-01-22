@@ -597,29 +597,54 @@ ISsimu.iri <- function(time=c(2000,1,1,11,0,0),latitude=69.5864,longitude=19.227
         ##
         ##
 
+        ##
+        ## Will chnge this to take into account the Earth curvature assuming spherical earth. The flat flat earth assumption leads to several km bias that makes life difficult in LPI and plasma parameter fits
+        ##
 
-        ## ranges at the remote
-        rminBi <- floor( (min(heightsMono) + sqrt(min(heightsMono)**2 + RXdist**2)) / 299792.458  * sampFreq )
-        rmaxBi <- floor( (max(heightsMono) + sqrt(max(heightsMono)**2 + RXdist**2)) / 299792.458  * sampFreq )
+        ## ## ranges at the remote
+        ## rminBi <- floor( (min(heightsMono) + sqrt(min(heightsMono)**2 + RXdist**2)) / 299792.458  * sampFreq )
+        ## rmaxBi <- floor( (max(heightsMono) + sqrt(max(heightsMono)**2 + RXdist**2)) / 299792.458  * sampFreq )
+        ## rangesBi <- seq(rminBi,rmaxBi)
+        ## ## the corresponding heights, a=RXdist, b=height, r=traveled distance / 2
+        ## ## c^2 = a^2+b^2
+        ## ## 2r = b+c
+
+        ## ## 2r = b + sqrt(a^2+b^2)
+        ## ## (2r-b)^2 = a^2+b^2
+        ## ## 4r^2+b^2-4rb = a^2+b^2
+        ## ## 4r^2-4rb = a^2
+        ## ## 4rb = 4r^2-a^2
+        ## ## b = (4r^2-a^2)/4r = r - a^2/4r
+        ## rangesBikm <- rangesBi * 299792.458 / 2 / sampFreq
+        ## heightsBi <- rangesBikm - RXdist^2/(4*rangesBikm)
+        ## nhBi <- length(heightsBi)
+        
+        ## ## elevation angles to each range gate
+        ## RXelevs <- atan(heightsBi/RXdist)*180/pi
+        ## ## scattering angles for each elevation
+        ## scattAngles <- 180 - (90 - RXelevs)
+
+        ## one more try with spherical Earth, radius 6371 km
+        Re <- 6371
+        ## smallest bistatic range (in sampling steps)
+        rminBi <-  floor( h2r( h=min(heightsMono) , x=RXdist , Re=Re ) / 299792.458 * sampFreq * 2 )
+        ## largest bistatic range
+        rmaxBi <-  floor( h2r( h=max(heightsMono) , x=RXdist , Re=Re ) / 299792.458 * sampFreq * 2 )
+        ## bistatic ranges with unit steps
         rangesBi <- seq(rminBi,rmaxBi)
-        ## the corresponding heights, a=RXdist, b=height, r=traveled distance / 2
-        ## c^2 = a^2+b^2
-        ## 2r = b+c
-
-        ## 2r = b + sqrt(a^2+b^2)
-        ## (2r-b)^2 = a^2+b^2
-        ## 4r^2+b^2-4rb = a^2+b^2
-        ## 4r^2-4rb = a^2
-        ## 4rb = 4r^2-a^2
-        ## b = (4r^2-a^2)/4r = r - a^2/4r
+        ## bistatic ranges in km
         rangesBikm <- rangesBi * 299792.458 / 2 / sampFreq
-        heightsBi <- rangesBikm - RXdist^2/(4*rangesBikm)
-        nhBi <- length(heightsBi)
-
+        ## altitudes of the beam intersections
+        heightsBi <- r2h( r=rangesBikm , x=RXdist , Re=Re )
+        ## number of bistatic gates
+        nhBi <- length(heightsBi)       
         ## elevation angles to each range gate
-        RXelevs <- atan(heightsBi/RXdist)*180/pi
+        a <- 2*rangesBikm - heightsBi
+        RXelevs <- ( pi/2 - asin( (Re+heightsBi)*sin(RXdist/Re) / a ) )*180/pi
+
         ## scattering angles for each elevation
-        scattAngles <- 180 - (90 - RXelevs)
+        scattAngles <- 90+RXdist/Re+RXelevs
+
         ## number of receiver beams
         nRX <- length(RXele)
         ## beam shape for each receiver beam
@@ -630,6 +655,7 @@ ISsimu.iri <- function(time=c(2000,1,1,11,0,0),latitude=69.5864,longitude=19.227
         
         monostatic <- FALSE
     }
+    save(rangesBi,rangesBikm,heightsBi,beamShapeBi,file='beamshapes.Rdata')
     
     ## spectrum at the core site
     spectrumMono    <- ISspectrum.iri( time=time , latitude=latitude , longitude=longitude , heights=heightsMono , freq=freqs , fradar=radarFreq , savePlasmaParams=TRUE)
@@ -709,6 +735,19 @@ ISsimu.iri <- function(time=c(2000,1,1,11,0,0),latitude=69.5864,longitude=19.227
     }
 } #ISsimu.iri
 
+
+h2r <- function(h,x,Re=6371){
+    ## half of the signal path length from TX via altitude h to RX assuming
+    ## spherical earth x<<Re, vertical TX beam and RX at distance x from TX
+    return(h/2 + .5*sqrt(Re**2+(Re+h)**2-2*Re*(Re+h)*cos(x/Re)))
+}
+
+r2h <- function(r,x,Re=6371){
+    ##
+    ## inverse of r2h approximating 1-cos(x) = x^2/2
+    ##
+    return((4*r**2-x**2)/(4*r+x**2/Re))
+}
 
 
 IQsample <- function(rsig,t=seq(length(rsig)),cfreq,nfilter){

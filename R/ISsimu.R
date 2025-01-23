@@ -516,6 +516,9 @@ ISsimu.general <- function(ISspectra,rmin=1,TXenvelope,flen=1000000,fileType=c('
             if(snum>flen){
                 writeSimuDataFile( fnum=fnum , rsig=rsig , rtx=rtx , flen=flen , fileType=fileType[1] , prefix=file.path(odir,ddir,'simudata') )
                 writeTimestampsFile.gdf(prefix='simudata-',extension='.gdf',nstart=1,nend=fnum,times=(seq(fnum)-1)*timestep+time0,fname=file.path(odir,'timestamps.log'))
+                if(fnum==1){
+                    writeSamplerLogFile(sFreq=sampFreq,fname=file.path(odir,'sampler.log'))
+                }
                 fnum <- fnum + 1
                 snum <- 1
                 if(fnum>nfile) return()
@@ -654,8 +657,8 @@ ISsimu.iri <- function(time=c(2000,1,1,11,0,0),latitude=69.5864,longitude=19.227
         }
         
         monostatic <- FALSE
+        save(rangesBi,rangesBikm,heightsBi,beamShapeBi,file='beamshapes.Rdata')
     }
-    save(rangesBi,rangesBikm,heightsBi,beamShapeBi,file='beamshapes.Rdata')
     
     ## spectrum at the core site
     spectrumMono    <- ISspectrum.iri( time=time , latitude=latitude , longitude=longitude , heights=heightsMono , freq=freqs , fradar=radarFreq , savePlasmaParams=TRUE)
@@ -1055,4 +1058,13 @@ ISsimu.selectBeam <- function(iBeam,RXele,ISspectraMono,ISspectraBi,rminMono=1,r
         return(ISsimu.general( ISspectra=ISspectraBi , rmin=rminBi , TXenvelope=TXenvelope , flen=flen ,fileType=fileType , time0=time0 , timestep=timestep ,  nfile=nfile , sampFreq=sampFreq , beamShape=beamShape[[iBeam]] , monostatic=FALSE , odir=odirB , ddir=ddir ))
     }
         
+}
+writeSamplerLogFile <- function(sFreq,fname){
+
+    fid <- file(fname,'w')
+    cat('',file=fid)
+    ststr <- sprintf('Sample rate %10.8f MHz',sFreq/1e6)
+    cat(ststr,'\n',file=fid,append=TRUE)
+    close(fid)
+    
 }
